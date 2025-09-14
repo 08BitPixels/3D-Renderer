@@ -14,8 +14,25 @@ class Window:
 		self._CLOCK = pygame.time.Clock()
 
 		pygame.display.set_caption(title = '3D Renderer')
+		
+		self._prev_time = time()
+		self._dt = 1.0
+
+	def update(self) -> None:
+		
+		pygame.display.update()
+		window.clock.tick(window.fps)
+		
+		self._dt = time() - self._prev_time
+		self._prev_time = time()
+		
+ def calc_dt() -> None:
 
 	# PROPERTIES
+	
+	@ property
+	def dt(self) -> float:
+		return self._dt
 
 	@ property
 	def dimensions(self) -> tuple[int, int]:
@@ -56,13 +73,10 @@ class ViewPoint:
 		def input() -> None:
 
 			keys_pressed = pygame.key.get_pressed()
-
-			if keys_pressed[pygame.K_w]: self._pos.z += self._MOVESPEED * dt
-			if keys_pressed[pygame.K_s]: self._pos.z -= self._MOVESPEED * dt
-			if keys_pressed[pygame.K_a]: self._pos.x -= self._MOVESPEED * dt
-			if keys_pressed[pygame.K_d]: self._pos.x += self._MOVESPEED * dt
-			if keys_pressed[pygame.K_SPACE]: self._pos.y += self._MOVESPEED * dt
-			if keys_pressed[pygame.K_LSHIFT]: self._pos.y -= self._MOVESPEED * dt
+			
+			self._pos.x += (keys_pressed[pygame.K_d] - keys_pressed[pygame.K_a]) * self._MOVESPEED * dt
+		 self._pos.y += (keys_pressed[pygame.K_SPACE] - keys_pressed[pygame.K_LSHIFT]) * self._MOVESPEED * dt
+   self._pos.z += (keys_pressed[pygame.K_w] - keys_pressed[pygame.K_s]) * self._MOVESPEED * dt
 
 		input()
 
@@ -82,7 +96,7 @@ class ViewPoint:
 class Polygon:
 	
 	def __init__(self, vertices: list[tuple[int, int, int]]) -> None:
-		self._vertices = vertices = [x for x in map(pygame.math.Vector3, vertices)]
+		self._vertices = [x for x in map(pygame.math.Vector3, vertices)]
 	
 	@ property
 	def vertices(self) -> list[pygame.math.Vector3]:
@@ -138,7 +152,7 @@ class World:
 				x_angle = degrees(atan(x_diff / z_diff))
 				y_angle = degrees(atan(y_diff / z_diff))
 				
-				fov = viewpoint.fov
+				fov = viewpoint.fov / 2
 				x = (x_angle / fov) * (self._WINDOW.width / 2) + (self._WINDOW.width / 2)
 				y = -(y_angle / fov) * (self._WINDOW.height / 2) + (self._WINDOW.height / 2)
 				coords.append((x, y))
@@ -154,18 +168,14 @@ def main() -> None:
 		fps = 144
 	)
 	world = World(window = window)
-	viewpoint = ViewPoint(pos = (-10, 0, -10), fov = 40)
+	viewpoint = ViewPoint(pos = (-10, 0, -10), fov = 90)
 
 	cubes = []
 	for x in range(0, 50, 10):
 		for z in range(0, 50, 10):
 			cubes.append(Cube(pos = (x, 0, z), side_length = 10))
-
-	prev_time = time()
+			
 	while True:
-
-		dt = time() - prev_time
-		prev_time = time()
 	
 		for event in pygame.event.get():
 		
@@ -175,7 +185,7 @@ def main() -> None:
 				exit()
 
 			if event.type == pygame.MOUSEWHEEL:
-				viewpoint.adj_fov(dt = dt, scrollwheel = event.y)
+				viewpoint.adj_fov(dt = window.dt, scrollwheel = event.y)
 	
 		window.surf.fill('#ffffff')
 
@@ -188,10 +198,9 @@ def main() -> None:
 		window.surf.blit(text1_surf, text1_rect)
 		window.surf.blit(text2_surf, text2_rect)
 		
-		viewpoint.update(dt = dt)
+		viewpoint.update(dt = window.dt)
 		world.render(polygons = cubes, viewpoint = viewpoint)
 		
-		pygame.display.update()
-		window.clock.tick(window.fps)
+		window.update()
 	
 if __name__ == '__main__': main()
