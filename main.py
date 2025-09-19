@@ -21,17 +21,17 @@ class Window:
 	def update(self) -> None:
 		
 		pygame.display.update()
-		window.clock.tick(window.fps)
+		self.clock.tick(self.fps)
 		
 		self._dt = time() - self._prev_time
 		self._prev_time = time()
 		
- def to_pygame_coords(self, coords: tuple[float, float] | pygame.math.Vector3) -> pygame.math.Vector3:
+	def to_pygame_coords(self, coords: tuple[float, float] | pygame.math.Vector2) -> pygame.math.Vector2:
 		
 		x = coords[0] + (self.width / 2)
-		y = -(coords[1] + (self.height / 2))
+		y = -(coords[1] - (self.height / 2))
 		
-		return pygame.math.Vector3((x, y))
+		return pygame.math.Vector2((x, y))
 
 	# PROPERTIES
 	
@@ -92,6 +92,8 @@ class ViewPoint:
 		if self._fov < 1: self._fov = 1
 		if self._fov > 180: self._fov = 180
 
+	# PROPERTIES
+
 	@ property
 	def fov(self) -> float:
 		return self._fov
@@ -102,11 +104,13 @@ class ViewPoint:
 
 class Polygon:
 	
-	def __init__(self, vertices: list[tuple[int, int, int]], anchor: int) -> None:
+	def __init__(self, vertices: list[pygame.math.Vector3], anchor: int) -> None:
 		
-		self._vertices = list(map(pygame.math.Vector3, vertices))
+		self._vertices = vertices
 		self._pos = vertices[anchor]
 	
+	# PROPERTIES
+
 	@ property
 	def vertices(self) -> list[pygame.math.Vector3]:
 		return self._vertices
@@ -120,18 +124,23 @@ class Cube(Polygon):
 	def __init__(self, anchor: int, pos: tuple[int, int, int], side_length: int) -> None:
 
 		self._side_length = side_length
-		pos = pygame.math.Vector3(pos)
+		self._pos = pygame.math.Vector3(pos)
 
-		vertices = [
-			(pos.x, pos.y, pos.z),
-			(pos.x, pos.y, pos.z + side_length),
-			(pos.x, pos.y + side_length, pos.z),
-			(pos.x, pos.y + side_length, pos.z + side_length),
-			(pos.x + side_length, pos.y, pos.z),
-			(pos.x + side_length, pos.y, pos.z + side_length),
-			(pos.x + side_length, pos.y + side_length, pos.z),
-			(pos.x + side_length, pos.y + side_length, pos.z + side_length),
-		]
+		vertices = list(
+			map(
+				pygame.math.Vector3, 
+				[
+					(self.pos.x, self.pos.y, self.pos.z),
+					(self.pos.x, self.pos.y, self.pos.z + side_length),
+					(self.pos.x, self.pos.y + side_length, self.pos.z),
+					(self.pos.x, self.pos.y + side_length, self.pos.z + side_length),
+					(self.pos.x + side_length, self.pos.y, self.pos.z),
+					(self.pos.x + side_length, self.pos.y, self.pos.z + side_length),
+					(self.pos.x + side_length, self.pos.y + side_length, self.pos.z),
+					(self.pos.x + side_length, self.pos.y + side_length, self.pos.z + side_length),
+				]
+			)
+		)
 
 		super().__init__(vertices = vertices, anchor = anchor)
 
@@ -144,15 +153,14 @@ class RenderEngine:
 	def render(self, polygons: list[Polygon], viewpoint: ViewPoint) -> None:
 
 		coords = []
-		view_pos = viewpoint.pos
 	
 		for polygon in polygons:
 
 			for vertice in polygon.vertices:
 			
-				x_diff = vertice[0] - view_pos[0]
-				y_diff = vertice[1] - view_pos[1]
-				z_diff = vertice[2] - view_pos[2]
+				x_diff = vertice.x - viewpoint.pos.x
+				y_diff = vertice.y - viewpoint.pos.y
+				z_diff = vertice.z - viewpoint.pos.z
 				
 				x_angle = degrees(atan(x_diff / z_diff))
 				y_angle = degrees(atan(y_diff / z_diff))
@@ -160,7 +168,7 @@ class RenderEngine:
 				fov = viewpoint.fov / 2
 				x = (x_angle / fov) * (self._WINDOW.width / 2)
 				y = (y_angle / fov) * (self._WINDOW.height / 2) 
-				coords.append(self._WINDOW.to_pygame_coords(x, y))
+				coords.append(self._WINDOW.to_pygame_coords((x, y)))
 				
 				for i in range(len(coords) - 1):
 					pygame.draw.line(self._WINDOW.surf, '#000000', coords[i], coords[i + 1], width = 2)
@@ -172,17 +180,16 @@ def main() -> None:
 		dimensions = (1000, 1000),
 		fps = 144
 	)
-	render_engine = RenderEngine(window = window)
+	render_engine = RenderEngine(
+		window = window
+	)
 	viewpoint = ViewPoint(
 		window = window, 
 		pos = (-10, 0, -10), 
 		fov = 90
 	)
 
-	cubes = []
-	for x in range(0, 50, 10):
-		for z in range(0, 50, 10):
-			cubes.append(Cube(anchor = 0, pos = (x, 0, z), side_length = 10))
+	cubes: list[Polygon] = [Cube(anchor = 0, pos = (0, 0, 0), side_length = 10)]
 			
 	while True:
 	
@@ -194,7 +201,7 @@ def main() -> None:
 				exit()
 
 			if event.type == pygame.MOUSEWHEEL:
-				viewpoint.adj_fov(scroll_dir = event.y)
+				viewpoint.adj_fov(scrollwheel = event.y)
 	
 		window.surf.fill('#ffffff')
 
@@ -203,9 +210,13 @@ def main() -> None:
 
 		text2_surf = font.render(f'POS {[round(x, 2) for x in viewpoint.pos]}', False, '#000000')
 		text2_rect = text2_surf.get_rect(topleft = (0, 25))
+		
+		text3_surf = font.render(f'FPS {round(window.clock.get_fps(), 2)}', False, '#000000')
+		text3_rect = text3_surf.get_rect(topleft = (0, 50))
 
 		window.surf.blit(text1_surf, text1_rect)
 		window.surf.blit(text2_surf, text2_rect)
+		window.surf.blit(text3_surf, text3_rect)
 		
 		viewpoint.update()
 		render_engine.render(polygons = cubes, viewpoint = viewpoint)
